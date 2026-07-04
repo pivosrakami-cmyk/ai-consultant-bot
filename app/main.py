@@ -7,8 +7,19 @@ from app.db import get_db, init_db
 from app.funnel import find_or_create_client, get_active_dialog, handle_incoming_message
 from app.models import Client, Tenant
 from app.schemas import ClientDetailOut, ClientOut, ClientUpdate, TestMessageIn
+from app.messenger_channel import iter_incoming_messages as iter_messenger_messages
+from app.messenger_channel import resolve_credentials as resolve_messenger_credentials
+from app.messenger_channel import send_message as send_messenger_message
+from app.messenger_channel import extract_text as extract_messenger_text
 from app.telegram_channel import extract_text, resolve_bot_token, send_message
+from app.viber_channel import extract_text as extract_viber_text
+from app.viber_channel import resolve_token as resolve_viber_token
+from app.viber_channel import send_message as send_viber_message
 from app.voice_channel import process_voice_call
+from app.whatsapp_channel import extract_text as extract_whatsapp_text
+from app.whatsapp_channel import iter_incoming_messages as iter_whatsapp_messages
+from app.whatsapp_channel import resolve_credentials as resolve_whatsapp_credentials
+from app.whatsapp_channel import send_message as send_whatsapp_message
 
 app = FastAPI(title="AI-консультант — воркер")
 
@@ -81,6 +92,98 @@ async def voice_webhook(tenant_slug: str, request: Request, db: Session = Depend
         return {"ok": True}
 
     process_voice_call(db, tenant, payload.get("call", {}))
+    return {"ok": True}
+
+
+def _get_tenant_or_404(db: Session, tenant_slug: str) -> Tenant:
+    tenant = db.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Тенант не найден")
+    return tenant
+
+
+@app.get("/webhook/whatsapp/{tenant_slug}")
+def whatsapp_verify(tenant_slug: str, request: Request, db: Session = Depends(get_db)):
+    tenant = _get_tenant_or_404(db, tenant_slug)
+    _, _, verify_token = resolve_whatsapp_credentials(tenant)
+
+    params = request.query_params
+    if params.get("hub.verify_token") == verify_token:
+        return int(params.get("hub.challenge", 0))
+    raise HTTPException(status_code=403, detail="Неверный verify_token")
+
+
+@app.post("/webhook/whatsapp/{tenant_slug}")
+async def whatsapp_webhook(tenant_slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    tenant = _get_tenant_or_404(db, tenant_slug)
+    phone_number_id, access_token, _ = resolve_whatsapp_credentials(tenant)
+
+    payload = await request.json()
+    for message, sender_name in iter_whatsapp_messages(payload):
+        text = extract_whatsapp_text(access_token, message)
+        if not text:
+            continue
+
+        external_id = message["from"]
+        client = find_or_create_client(db, tenant, "whatsapp", external_id, name=sender_name, phone=external_id)
+        dialog = get_active_dialog(db, client, "whatsapp")
+        reply = handle_incoming_message(db, tenant, client, dialog, text)
+
+        send_whatsapp_message(access_token, phone_number_id, external_id, reply)
+
+    return {"ok": True}
+
+
+@app.get("/webhook/messenger/{tenant_slug}")
+def messenger_verify(tenant_slug: str, request: Request, db: Session = Depends(get_db)):
+    tenant = _get_tenant_or_404(db, tenant_slug)
+    _, verify_token = resolve_messenger_credentials(tenant)
+
+    params = request.query_params
+    if params.get("hub.verify_token") == verify_token:
+        return int(params.get("hub.challenge", 0))
+    raise HTTPException(status_code=403, detail="Неверный verify_token")
+
+
+@app.post("/webhook/messenger/{tenant_slug}")
+async def messenger_webhook(tenant_slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    tenant = _get_tenant_or_404(db, tenant_slug)
+    access_token, _ = resolve_messenger_credentials(tenant)
+
+    payload = await request.json()
+    for sender_id, message in iter_messenger_messages(payload):
+        text = extract_messenger_text(message)
+        if not text:
+            continue
+
+        client = find_or_create_client(db, tenant, "messenger", sender_id)
+        dialog = get_active_dialog(db, client, "messenger")
+        reply = handle_incoming_message(db, tenant, client, dialog, text)
+
+        send_messenger_message(access_token, sender_id, reply)
+
+    return {"ok": True}
+
+
+@app.post("/webhook/viber/{tenant_slug}")
+async def viber_webhook(tenant_slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    tenant = _get_tenant_or_404(db, tenant_slug)
+    token = resolve_viber_token(tenant)
+
+    payload = await request.json()
+    if payload.get("event") != "message":
+        return {"ok": True}
+
+    sender = payload["sender"]
+    text = extract_viber_text(payload["message"])
+    if not text:
+        return {"ok": True}
+
+    client = find_or_create_client(db, tenant, "viber", sender["id"], name=sender.get("name"))
+    dialog = get_active_dialog(db, client, "viber")
+    reply = handle_incoming_message(db, tenant, client, dialog, text)
+
+    send_viber_message(token, sender["id"], reply)
     return {"ok": True}
 
 

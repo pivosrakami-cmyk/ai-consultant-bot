@@ -11,6 +11,15 @@ class Settings(BaseSettings):
     crm_api_key: str = "change-me"
     public_base_url: str = ""
 
+    whatsapp_phone_number_id: str = ""
+    whatsapp_access_token: str = ""
+    whatsapp_verify_token: str = ""
+
+    messenger_page_access_token: str = ""
+    messenger_verify_token: str = ""
+
+    viber_bot_token: str = ""
+
     class Config:
         env_file = ".env"
 

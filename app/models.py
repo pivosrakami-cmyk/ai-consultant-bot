@@ -27,6 +27,15 @@ class Tenant(Base):
     system_prompt = Column(Text, nullable=False)
     telegram_notify_chat_id = Column(String, nullable=True)
     telegram_bot_token = Column(String, nullable=True)  # свой бот тенанта; иначе — общий из .env
+
+    # Учётные данные каналов — свои у тенанта, иначе fallback на общие из .env (см. config.py)
+    whatsapp_phone_number_id = Column(String, nullable=True)
+    whatsapp_access_token = Column(String, nullable=True)
+    whatsapp_verify_token = Column(String, nullable=True)
+    messenger_page_access_token = Column(String, nullable=True)
+    messenger_verify_token = Column(String, nullable=True)
+    viber_bot_token = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     clients = relationship("Client", back_populates="tenant")
@@ -46,6 +55,8 @@ class Client(Base):
     phone = Column(String, nullable=True, index=True)
     telegram_id = Column(String, nullable=True, index=True)
     whatsapp_id = Column(String, nullable=True, index=True)
+    viber_id = Column(String, nullable=True, index=True)
+    messenger_id = Column(String, nullable=True, index=True)
     first_channel = Column(String, nullable=False)
     status = Column(String, default="new")  # new / in_progress / lead / client
     notes = Column(Text, nullable=True)

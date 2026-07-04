@@ -28,7 +28,12 @@ def find_or_create_client(
         )
 
     if not client:
-        id_field = {"telegram": Client.telegram_id, "whatsapp": Client.whatsapp_id}.get(channel)
+        id_field = {
+            "telegram": Client.telegram_id,
+            "whatsapp": Client.whatsapp_id,
+            "viber": Client.viber_id,
+            "messenger": Client.messenger_id,
+        }.get(channel)
         if id_field is not None:
             client = (
                 db.query(Client)
@@ -50,6 +55,8 @@ def find_or_create_client(
         phone=phone,
         telegram_id=external_id if channel == "telegram" else None,
         whatsapp_id=external_id if channel == "whatsapp" else None,
+        viber_id=external_id if channel == "viber" else None,
+        messenger_id=external_id if channel == "messenger" else None,
         first_channel=channel,
     )
     db.add(client)

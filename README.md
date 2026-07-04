@@ -63,6 +63,28 @@ POST /webhook/voice/{tenant_slug}
 
 В дашборде сервиса нужно указать webhook URL: `https://<PUBLIC_BASE_URL>/webhook/voice/demo`.
 
+## WhatsApp
+
+Meta Business + WhatsApp Cloud API. В `.env` (или в полях тенанта для тиража):
+`WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN` (свой придуманный
+секрет — вписываешь тот же в Meta Developer Console).
+
+В настройках вебхука Meta укажи: `https://<PUBLIC_BASE_URL>/webhook/whatsapp/demo` и тот же
+verify token — Meta сама дёрнет GET для проверки, эндпоинт уже это умеет.
+
+## Facebook Messenger
+
+Meta Developer Console → Messenger Platform. Нужны `MESSENGER_PAGE_ACCESS_TOKEN` и
+`MESSENGER_VERIFY_TOKEN`. Webhook URL: `https://<PUBLIC_BASE_URL>/webhook/messenger/demo`.
+
+## Viber
+
+`VIBER_BOT_TOKEN` (Auth Token бота из Viber admin panel), затем регистрация вебхука:
+
+```bash
+python -m scripts.set_viber_webhook demo
+```
+
 ## Деплой
 
 Docker Compose (`docker-compose.yml`) — используется Coolify при деплое из GitHub.
