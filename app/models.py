@@ -65,8 +65,8 @@ class Client(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tenant = relationship("Tenant", back_populates="clients")
-    dialogs = relationship("Dialog", back_populates="client")
-    requests = relationship("LeadRequest", back_populates="client")
+    dialogs = relationship("Dialog", back_populates="client", cascade="all, delete-orphan")
+    requests = relationship("LeadRequest", back_populates="client", cascade="all, delete-orphan")
 
 
 class Dialog(Base):
@@ -82,7 +82,7 @@ class Dialog(Base):
     summary = Column(Text, nullable=True)
 
     client = relationship("Client", back_populates="dialogs")
-    messages = relationship("Message", back_populates="dialog")
+    messages = relationship("Message", back_populates="dialog", cascade="all, delete-orphan")
 
 
 class Message(Base):

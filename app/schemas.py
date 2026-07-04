@@ -63,6 +63,17 @@ class ClientUpdate(BaseModel):
     notes: str | None = None
 
 
+class ClientCreate(BaseModel):
+    tenant_slug: str
+    name: str | None = None
+    phone: str | None = None
+    notes: str | None = None
+
+
+class RequestUpdate(BaseModel):
+    status: str
+
+
 class TestMessageIn(BaseModel):
     tenant_slug: str
     channel: str = "test"

@@ -85,6 +85,18 @@ Meta Developer Console → Messenger Platform. Нужны `MESSENGER_PAGE_ACCESS
 python -m scripts.set_viber_webhook demo
 ```
 
+## CRM-панель
+
+Мини-CRM в браузере — поиск/фильтр клиентов, карточка (контакты, статус, заметки,
+резюме для памяти агента, история диалогов, заявки), редактирование и удаление.
+
+```
+http://<адрес-сервера>/crm/
+```
+
+При первом заходе браузер спросит API-ключ (`CRM_API_KEY` из `.env`) — сохранится
+в localStorage. Панель — статический HTML/JS без сборки, ходит в тот же `/api/clients`.
+
 ## Деплой
 
 Docker Compose (`docker-compose.yml`) — используется Coolify при деплое из GitHub.

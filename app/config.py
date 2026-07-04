@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    database_url: str = "sqlite:///./data/bot.db"
+    database_url: str = f"sqlite:///{(BASE_DIR / 'data' / 'bot.db').as_posix()}"
     claude_api_key: str = ""
     claude_model: str = "claude-sonnet-4-6"
     telegram_bot_token: str = ""
@@ -21,7 +25,7 @@ class Settings(BaseSettings):
     viber_bot_token: str = ""
 
     class Config:
-        env_file = ".env"
+        env_file = str(BASE_DIR / ".env")
 
 
 settings = Settings()

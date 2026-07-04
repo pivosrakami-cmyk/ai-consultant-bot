@@ -1,12 +1,21 @@
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.config import settings
+from app.config import BASE_DIR, settings
 from app.db import get_db, init_db
 from app.funnel import find_or_create_client, get_active_dialog, handle_incoming_message
-from app.models import Client, Tenant
-from app.schemas import ClientDetailOut, ClientOut, ClientUpdate, TestMessageIn
+from app.models import Client, LeadRequest, Tenant
+from app.schemas import (
+    ClientCreate,
+    ClientDetailOut,
+    ClientOut,
+    ClientUpdate,
+    LeadRequestOut,
+    RequestUpdate,
+    TestMessageIn,
+)
 from app.messenger_channel import iter_incoming_messages as iter_messenger_messages
 from app.messenger_channel import resolve_credentials as resolve_messenger_credentials
 from app.messenger_channel import send_message as send_messenger_message
@@ -22,6 +31,7 @@ from app.whatsapp_channel import resolve_credentials as resolve_whatsapp_credent
 from app.whatsapp_channel import send_message as send_whatsapp_message
 
 app = FastAPI(title="AI-консультант — воркер")
+app.mount("/crm", StaticFiles(directory=str(BASE_DIR / "app" / "static"), html=True), name="crm")
 
 
 @app.on_event("startup")
@@ -191,9 +201,12 @@ async def viber_webhook(tenant_slug: str, request: Request, db: Session = Depend
 def list_clients(
     q: str | None = None,
     status: str | None = None,
+    tenant_slug: str | None = None,
     db: Session = Depends(get_db),
 ) -> list[Client]:
     query = db.query(Client)
+    if tenant_slug:
+        query = query.join(Tenant).filter(Tenant.slug == tenant_slug)
     if status:
         query = query.filter(Client.status == status)
     if q:
@@ -202,6 +215,12 @@ def list_clients(
             or_(Client.name.ilike(like), Client.phone.ilike(like))
         )
     return query.order_by(Client.updated_at.desc()).all()
+
+
+@app.get("/api/tenants", dependencies=[Depends(check_api_key)])
+def list_tenants(db: Session = Depends(get_db)) -> list[dict]:
+    tenants = db.query(Tenant).all()
+    return [{"slug": t.slug, "name": t.name} for t in tenants]
 
 
 @app.get(
@@ -234,3 +253,55 @@ def update_client(
     db.commit()
     db.refresh(client)
     return client
+
+
+@app.post(
+    "/api/clients",
+    response_model=ClientOut,
+    dependencies=[Depends(check_api_key)],
+)
+def create_client(payload: ClientCreate, db: Session = Depends(get_db)) -> Client:
+    tenant = db.query(Tenant).filter(Tenant.slug == payload.tenant_slug).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Тенант не найден")
+
+    client = Client(
+        tenant_id=tenant.id,
+        name=payload.name,
+        phone=payload.phone,
+        notes=payload.notes,
+        first_channel="manual",
+    )
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+@app.delete("/api/clients/{client_id}", dependencies=[Depends(check_api_key)])
+def delete_client(client_id: int, db: Session = Depends(get_db)) -> dict:
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+
+    db.delete(client)
+    db.commit()
+    return {"ok": True}
+
+
+@app.patch(
+    "/api/requests/{request_id}",
+    response_model=LeadRequestOut,
+    dependencies=[Depends(check_api_key)],
+)
+def update_request(
+    request_id: int, payload: RequestUpdate, db: Session = Depends(get_db)
+) -> LeadRequest:
+    lead_request = db.query(LeadRequest).filter(LeadRequest.id == request_id).first()
+    if not lead_request:
+        raise HTTPException(status_code=404, detail="Заявка не найдена")
+
+    lead_request.status = payload.status
+    db.commit()
+    db.refresh(lead_request)
+    return lead_request

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>CRM — AI-консультант</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; background: #f4f4f6; }
+  .col { padding: 16px; overflow-y: auto; }
+  .list-col { width: 340px; border-right: 1px solid #ddd; background: #fff; }
+  .detail-col { flex: 1; }
+  input, select, textarea, button { font-size: 14px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; }
+  textarea { width: 100%; min-height: 70px; font-family: inherit; }
+  .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .row > * { flex: 1; }
+  button { background: #4a4ad1; color: #fff; border: none; cursor: pointer; flex: none; }
+  button.secondary { background: #888; }
+  button.danger { background: #c0392b; }
+  .client-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+  .client-item:hover { background: #f0f0ff; }
+  .client-item.active { background: #e4e4ff; }
+  .client-item .name { font-weight: 600; }
+  .client-item .meta { font-size: 12px; color: #777; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #ddd; }
+  .badge.lead { background: #ffd27a; }
+  .badge.client { background: #8be08b; }
+  .section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .dialog { border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px; padding: 8px; }
+  .msg { padding: 4px 0; font-size: 13px; }
+  .msg.user { color: #222; }
+  .msg.assistant { color: #4a4ad1; }
+  h2, h3 { margin-top: 0; }
+  label { font-size: 12px; color: #666; display: block; margin-bottom: 3px; }
+  .field { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<div class="col list-col">
+  <h3>Клиенты</h3>
+  <div class="row">
+    <input id="searchInput" placeholder="Поиск: имя, телефон" />
+  </div>
+  <div class="row">
+    <select id="statusFilter">
+      <option value="">Все статусы</option>
+      <option value="new">Новый</option>
+      <option value="in_progress">В работе</option>
+      <option value="lead">Заявка</option>
+      <option value="client">Клиент</option>
+    </select>
+    <button id="newClientBtn">+ Клиент</button>
+  </div>
+  <div id="clientList"></div>
+</div>
+
+<div class="col detail-col">
+  <div id="detail"><p>Выберите клиента слева.</p></div>
+</div>
+
+<script>
+const API_KEY_STORAGE = "crm_api_key";
+let apiKey = localStorage.getItem(API_KEY_STORAGE);
+if (!apiKey) {
+  apiKey = prompt("Введите API-ключ CRM (CRM_API_KEY из .env):") || "";
+  localStorage.setItem(API_KEY_STORAGE, apiKey);
+}
+
+let selectedClientId = null;
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: { "Content-Type": "application/json", "X-API-Key": apiKey, ...(options.headers || {}) },
+  });
+  if (res.status === 401) {
+    localStorage.removeItem(API_KEY_STORAGE);
+    alert("Неверный API-ключ. Обновите страницу и введите заново.");
+    throw new Error("unauthorized");
+  }
+  if (!res.ok) throw new Error(await res.text());
+  return res.status === 204 ? null : res.json();
+}
+
+const statusLabel = { new: "Новый", in_progress: "В работе", lead: "Заявка", client: "Клиент" };
+
+async function loadClients() {
+  const q = document.getElementById("searchInput").value;
+  const status = document.getElementById("statusFilter").value;
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (status) params.set("status", status);
+
+  const clients = await api("/api/clients?" + params.toString());
+  const list = document.getElementById("clientList");
+  list.innerHTML = "";
+  clients.forEach((c) => {
+    const div = document.createElement("div");
+    div.className = "client-item" + (c.id === selectedClientId ? " active" : "");
+    div.innerHTML = `
+      <div class="name">${c.name || "(без имени)"} <span class="badge ${c.status}">${statusLabel[c.status] || c.status}</span></div>
+      <div class="meta">${c.phone || c.first_channel}</div>
+    `;
+    div.onclick = () => selectClient(c.id);
+    list.appendChild(div);
+  });
+}
+
+async function selectClient(id) {
+  selectedClientId = id;
+  loadClients();
+  const c = await api(`/api/clients/${id}`);
+  renderDetail(c);
+}
+
+function renderDetail(c) {
+  const detail = document.getElementById("detail");
+  detail.innerHTML = `
+    <div class="section">
+      <h2>Карточка клиента</h2>
+      <div class="row">
+        <div class="field"><label>Имя</label><input id="f_name" value="${c.name || ""}" /></div>
+        <div class="field"><label>Телефон</label><input id="f_phone" value="${c.phone || ""}" /></div>
+        <div class="field">
+          <label>Статус</label>
+          <select id="f_status">
+            ${Object.entries(statusLabel).map(([k, v]) => `<option value="${k}" ${k === c.status ? "selected" : ""}>${v}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Заметки</label><textarea id="f_notes">${c.notes || ""}</textarea></div>
+      <div class="row">
+        <button onclick="saveClient(${c.id})">Сохранить</button>
+        <button class="danger" onclick="deleteClient(${c.id})">Удалить клиента</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Резюме (память для агента)</h3>
+      <p>${c.summary || "— пока нет истории —"}</p>
+    </div>
+
+    <div class="section">
+      <h3>Заявки</h3>
+      ${c.requests.length === 0 ? "<p>Заявок нет.</p>" : c.requests.map((r) => `
+        <div class="dialog">
+          <div>${r.description || ""}</div>
+          <div class="meta">${new Date(r.created_at).toLocaleString()}</div>
+          <select onchange="updateRequest(${r.id}, this.value)">
+            <option value="new" ${r.status === "new" ? "selected" : ""}>Новая</option>
+            <option value="done" ${r.status === "done" ? "selected" : ""}>Выполнена</option>
+            <option value="cancelled" ${r.status === "cancelled" ? "selected" : ""}>Отменена</option>
+          </select>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="section">
+      <h3>История диалогов</h3>
+      ${c.dialogs.length === 0 ? "<p>Диалогов нет.</p>" : c.dialogs.map((d) => `
+        <div class="dialog">
+          <div class="meta">${d.channel} · ${new Date(d.started_at).toLocaleString()}</div>
+          ${d.messages.map((m) => `<div class="msg ${m.role}"><b>${m.role === "user" ? "Клиент" : "Бот"}:</b> ${m.content}</div>`).join("")}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function saveClient(id) {
+  await api(`/api/clients/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: document.getElementById("f_name").value,
+      phone: document.getElementById("f_phone").value,
+      status: document.getElementById("f_status").value,
+      notes: document.getElementById("f_notes").value,
+    }),
+  });
+  selectClient(id);
+}
+
+async function deleteClient(id) {
+  if (!confirm("Удалить клиента и всю его историю?")) return;
+  await api(`/api/clients/${id}`, { method: "DELETE" });
+  selectedClientId = null;
+  document.getElementById("detail").innerHTML = "<p>Выберите клиента слева.</p>";
+  loadClients();
+}
+
+async function updateRequest(id, status) {
+  await api(`/api/requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+}
+
+document.getElementById("newClientBtn").onclick = async () => {
+  const tenants = await api("/api/tenants");
+  const tenantSlug = tenants[0]?.slug;
+  if (!tenantSlug) return alert("Нет ни одного тенанта в базе.");
+
+  const name = prompt("Имя клиента:");
+  if (name === null) return;
+  const phone = prompt("Телефон:") || null;
+
+  const client = await api("/api/clients", {
+    method: "POST",
+    body: JSON.stringify({ tenant_slug: tenantSlug, name, phone }),
+  });
+  loadClients();
+  selectClient(client.id);
+};
+
+document.getElementById("searchInput").addEventListener("input", debounce(loadClients, 300));
+document.getElementById("statusFilter").addEventListener("change", loadClients);
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+loadClients();
+</script>
+</body>
+</html>
