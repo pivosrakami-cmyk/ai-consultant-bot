@@ -8,6 +8,7 @@ from app.funnel import find_or_create_client, get_active_dialog, handle_incoming
 from app.models import Client, Tenant
 from app.schemas import ClientDetailOut, ClientOut, ClientUpdate, TestMessageIn
 from app.telegram_channel import extract_text, resolve_bot_token, send_message
+from app.voice_channel import process_voice_call
 
 app = FastAPI(title="AI-консультант — воркер")
 
@@ -64,6 +65,22 @@ async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Dep
     reply = handle_incoming_message(db, tenant, client, dialog, text)
 
     send_message(token, chat_id, reply)
+    return {"ok": True}
+
+
+@app.post("/webhook/voice/{tenant_slug}")
+async def voice_webhook(tenant_slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    tenant = db.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Тенант не найден")
+
+    payload = await request.json()
+    # Обрабатываем только завершённый звонок — анализ делаем сами через Claude,
+    # не полагаясь на конфигурацию post-call analysis конкретного провайдера.
+    if payload.get("event") != "call_ended":
+        return {"ok": True}
+
+    process_voice_call(db, tenant, payload.get("call", {}))
     return {"ok": True}
 
 
