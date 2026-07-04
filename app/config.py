@@ -7,7 +7,9 @@ class Settings(BaseSettings):
     claude_model: str = "claude-sonnet-4-6"
     telegram_bot_token: str = ""
     telegram_notify_chat_id: str = ""
+    gemini_api_key: str = ""
     crm_api_key: str = "change-me"
+    public_base_url: str = ""
 
     class Config:
         env_file = ".env"

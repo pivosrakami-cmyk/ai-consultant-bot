@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -7,6 +7,7 @@ from app.db import get_db, init_db
 from app.funnel import find_or_create_client, get_active_dialog, handle_incoming_message
 from app.models import Client, Tenant
 from app.schemas import ClientDetailOut, ClientOut, ClientUpdate, TestMessageIn
+from app.telegram_channel import extract_text, resolve_bot_token, send_message
 
 app = FastAPI(title="AI-консультант — воркер")
 
@@ -38,6 +39,32 @@ def test_message(payload: TestMessageIn, db: Session = Depends(get_db)) -> dict:
     dialog = get_active_dialog(db, client, payload.channel)
     reply = handle_incoming_message(db, tenant, client, dialog, payload.text)
     return {"reply": reply}
+
+
+@app.post("/webhook/telegram/{tenant_slug}")
+async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    tenant = db.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Тенант не найден")
+
+    update = await request.json()
+    message = update.get("message")
+    if not message:
+        return {"ok": True}
+
+    token = resolve_bot_token(tenant.telegram_bot_token)
+    chat_id = message["chat"]["id"]
+    text = extract_text(token, message)
+    if not text:
+        return {"ok": True}
+
+    name = message.get("from", {}).get("first_name")
+    client = find_or_create_client(db, tenant, "telegram", str(chat_id), name=name)
+    dialog = get_active_dialog(db, client, "telegram")
+    reply = handle_incoming_message(db, tenant, client, dialog, text)
+
+    send_message(token, chat_id, reply)
+    return {"ok": True}
 
 
 @app.get("/api/clients", response_model=list[ClientOut], dependencies=[Depends(check_api_key)])

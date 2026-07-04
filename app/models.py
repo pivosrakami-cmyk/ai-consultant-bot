@@ -26,6 +26,7 @@ class Tenant(Base):
     name = Column(String, nullable=False)
     system_prompt = Column(Text, nullable=False)
     telegram_notify_chat_id = Column(String, nullable=True)
+    telegram_bot_token = Column(String, nullable=True)  # свой бот тенанта; иначе — общий из .env
     created_at = Column(DateTime, default=datetime.utcnow)
 
     clients = relationship("Client", back_populates="tenant")
