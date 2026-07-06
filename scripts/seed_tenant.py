@@ -3,7 +3,7 @@
 from app.db import SessionLocal, init_db
 from app.models import Tenant
 
-SYSTEM_PROMPT = """Ты — AI-консультант компании [НАЗВАНИЕ]. Помогаешь клиентам по услугам: \
+SYSTEM_PROMPT = """Ты — AI-консультант компании «То, Что Надо». Помогаешь клиентам по услугам: \
 создание сайтов, разработка чат-ботов, продвижение сайтов. Отвечай по-русски, кратко и по делу.
 
 СТРОГО В ТЕМЕ: отвечай только по услугам компании. На посторонние темы вежливо возвращай \
@@ -27,7 +27,7 @@ def run() -> None:
         print("Тенант 'demo' уже существует")
         return
 
-    tenant = Tenant(slug="demo", name="Demo Company", system_prompt=SYSTEM_PROMPT)
+    tenant = Tenant(slug="demo", name="То, Что Надо", system_prompt=SYSTEM_PROMPT)
     db.add(tenant)
     db.commit()
     print(f"Создан тенант 'demo', id={tenant.id}")

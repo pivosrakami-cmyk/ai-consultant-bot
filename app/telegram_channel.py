@@ -9,7 +9,14 @@ def _api_url(token: str, method: str) -> str:
 
 
 def send_message(token: str, chat_id: int | str, text: str) -> None:
-    httpx.post(_api_url(token, "sendMessage"), json={"chat_id": chat_id, "text": text}, timeout=10)
+    # Проверяем ответ Telegram: без этого ошибка отправки (битый токен, пустой текст)
+    # молча терялась бы, а вебхук всё равно возвращал бы 200.
+    response = httpx.post(
+        _api_url(token, "sendMessage"),
+        json={"chat_id": chat_id, "text": text},
+        timeout=10,
+    )
+    response.raise_for_status()
 
 
 def _download_file(token: str, file_id: str) -> bytes:
