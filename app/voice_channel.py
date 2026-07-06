@@ -1,8 +1,10 @@
+import json
+
 from sqlalchemy.orm import Session
 
 from app.claude_client import ask_claude
 from app.memory import summarize_dialog
-from app.funnel import LEAD_MARKER, find_or_create_client
+from app.funnel import LEAD_MARKER, extract_phone, find_or_create_client
 from app.models import Dialog, LeadRequest, Message, Tenant
 from app.telegram_notify import notify_owner
 
@@ -12,6 +14,26 @@ LEAD_EXTRACT_PROMPT = (
     "<<LEAD: имя, контакт если есть, суть запроса>>. Если контакт не оставлен и "
     "явного согласия не было — ответь пустой строкой."
 )
+
+CONTACT_PROMPT = (
+    "Из транскрипта звонка извлеки имя клиента и его телефон, если они названы. "
+    "Ответь строго в формате JSON, без пояснений и markdown: "
+    '{"name": "имя или пусто", "phone": "телефон или пусто"}'
+)
+
+
+def _extract_contact(transcript_text: str) -> tuple[str | None, str | None]:
+    """Достаёт имя и телефон из транскрипта. Телефон надёжнее берём регуляркой."""
+    name = None
+    raw = ask_claude(CONTACT_PROMPT, [{"role": "user", "content": transcript_text}])
+    try:
+        data = json.loads(raw.strip().strip("`"))
+        name = (data.get("name") or "").strip() or None
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    phone = extract_phone(transcript_text)
+    return name, phone
 
 # Разные провайдеры (Retell/ElevenLabs) по-разному называют поля реплик в транскрипте,
 # поэтому пробуем несколько вариантов ключей вместо жёсткой привязки к одному формату.
@@ -69,8 +91,19 @@ def process_voice_call(db: Session, tenant: Tenant, call: dict) -> None:
     db.add(dialog)
     db.commit()
 
-    for msg in _parse_transcript(call):
+    messages = _parse_transcript(call)
+    for msg in messages:
         db.add(Message(dialog_id=dialog.id, role=msg["role"], content=msg["content"]))
+    db.commit()
+
+    # Имя и телефон из разговора — в поля карточки (раньше оставались пустыми,
+    # данные жили только в резюме и тексте заявки).
+    transcript_text = "\n".join(m["content"] for m in messages)
+    name, extracted_phone = _extract_contact(transcript_text)
+    if name and not client.name:
+        client.name = name
+    if extracted_phone and not client.phone:
+        client.phone = extracted_phone
     db.commit()
 
     summarize_dialog(db, dialog)
