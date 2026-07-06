@@ -20,6 +20,27 @@ _TEXT_KEYS = ("content", "text", "utterance", "message")
 _AGENT_ROLES = {"agent", "assistant", "bot"}
 
 
+def normalize_call(payload: dict) -> dict | None:
+    """Приводит вебхук голосового провайдера к единому виду `call`.
+
+    Возвращает None, если событие не про завершённый звонок (его игнорируем).
+    Поддержаны ElevenLabs (post-call) и Retell — форматы у них разные.
+    """
+    # ElevenLabs: post-call webhook — данные лежат в `data`, реплики в `transcript`
+    if payload.get("type") == "post_call_transcription":
+        data = payload.get("data", {})
+        return {
+            "call_id": data.get("conversation_id", ""),
+            "transcript_object": data.get("transcript", []),
+        }
+
+    # Retell: обрабатываем только завершённый звонок
+    if payload.get("event") == "call_ended":
+        return payload.get("call", {})
+
+    return None
+
+
 def _parse_transcript(call: dict) -> list[dict]:
     turns = call.get("transcript_object") or []
     messages = []

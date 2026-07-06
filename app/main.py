@@ -24,7 +24,7 @@ from app.telegram_channel import extract_text, resolve_bot_token, send_message
 from app.viber_channel import extract_text as extract_viber_text
 from app.viber_channel import resolve_token as resolve_viber_token
 from app.viber_channel import send_message as send_viber_message
-from app.voice_channel import process_voice_call
+from app.voice_channel import normalize_call, process_voice_call
 from app.whatsapp_channel import extract_text as extract_whatsapp_text
 from app.whatsapp_channel import iter_incoming_messages as iter_whatsapp_messages
 from app.whatsapp_channel import resolve_credentials as resolve_whatsapp_credentials
@@ -98,10 +98,12 @@ async def voice_webhook(tenant_slug: str, request: Request, db: Session = Depend
     payload = await request.json()
     # Обрабатываем только завершённый звонок — анализ делаем сами через Claude,
     # не полагаясь на конфигурацию post-call analysis конкретного провайдера.
-    if payload.get("event") != "call_ended":
+    # normalize_call понимает форматы ElevenLabs и Retell, прочее событие → None.
+    call = normalize_call(payload)
+    if call is None:
         return {"ok": True}
 
-    process_voice_call(db, tenant, payload.get("call", {}))
+    process_voice_call(db, tenant, call)
     return {"ok": True}
 
 
