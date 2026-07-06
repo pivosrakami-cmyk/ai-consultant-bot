@@ -10,8 +10,9 @@ GEMINI_URL = (
 )
 
 
-def transcribe_voice(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
-    """Расшифровывает голосовое сообщение в текст через Gemini."""
+def transcribe_voice(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str | None:
+    """Расшифровывает голосовое через Gemini. Возвращает None при сбое
+    (лимит 429, ошибка сети и т.п.) — чтобы сбой не ронял обработчик вебхука."""
     payload = {
         "contents": [
             {
@@ -28,12 +29,15 @@ def transcribe_voice(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
         ]
     }
 
-    response = httpx.post(
-        GEMINI_URL,
-        params={"key": settings.gemini_api_key},
-        json=payload,
-        timeout=30,
-    )
-    response.raise_for_status()
-    data = response.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    try:
+        response = httpx.post(
+            GEMINI_URL,
+            params={"key": settings.gemini_api_key},
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except (httpx.HTTPError, KeyError, IndexError):
+        return None

@@ -78,6 +78,9 @@ async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Dep
     chat_id = message["chat"]["id"]
     text = extract_text(token, message)
     if not text:
+        # Голосовое не распозналось (лимит Gemini и т.п.) — просим написать текстом
+        if "voice" in message or "audio" in message:
+            send_message(token, chat_id, "Не получилось распознать голосовое. Напишите, пожалуйста, текстом.")
         return {"ok": True}
 
     name = message.get("from", {}).get("first_name")
