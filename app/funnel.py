@@ -3,6 +3,7 @@ import re
 from sqlalchemy.orm import Session
 
 from app.claude_client import ask_claude
+from app.memory import summarize_dialog
 from app.models import Client, Dialog, LeadRequest, Message, Tenant
 from app.telegram_notify import notify_owner
 
@@ -106,6 +107,11 @@ def handle_incoming_message(
 
     db.add(Message(dialog_id=dialog.id, role="assistant", content=visible_reply))
     db.commit()
+
+    # Обновляем резюме диалога после каждого обмена: раньше для текстовых каналов
+    # оно не считалось вообще (только на голосовом звонке) — в CRM было пусто,
+    # и память между обращениями не работала.
+    summarize_dialog(db, dialog)
 
     if lead_match:
         description = lead_match.group(1).strip()
