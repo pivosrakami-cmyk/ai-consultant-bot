@@ -39,5 +39,10 @@ def transcribe_voice(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str | 
         response.raise_for_status()
         data = response.json()
         return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except (httpx.HTTPError, KeyError, IndexError):
+    except httpx.HTTPStatusError as e:
+        # Логируем причину, иначе сбой распознавания молча теряется
+        print(f"[voice] Gemini {e.response.status_code}: {e.response.text[:400]}", flush=True)
+        return None
+    except (httpx.HTTPError, KeyError, IndexError) as e:
+        print(f"[voice] transcription failed: {e!r}", flush=True)
         return None
