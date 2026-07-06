@@ -10,6 +10,18 @@ from app.telegram_notify import notify_owner
 LEAD_MARKER = re.compile(r"<<LEAD:(.*?)>>", re.DOTALL)
 HISTORY_LIMIT = 20
 
+# Телефон в сообщении: опциональный +, дальше цифры с пробелами/скобками/дефисами.
+_PHONE_RE = re.compile(r"\+?\d[\d\s()\-]{7,}\d")
+
+
+def extract_phone(text: str) -> str | None:
+    """Достаёт телефон из текста. Нормализованная длина цифр — 9..15."""
+    for match in _PHONE_RE.finditer(text):
+        digits = re.sub(r"\D", "", match.group())
+        if 9 <= len(digits) <= 15:
+            return match.group().strip()
+    return None
+
 
 def find_or_create_client(
     db: Session,
@@ -85,6 +97,12 @@ def handle_incoming_message(
     db: Session, tenant: Tenant, client: Client, dialog: Dialog, text: str
 ) -> str:
     db.add(Message(dialog_id=dialog.id, role="user", content=text))
+
+    # Если клиент прислал телефон, а в карточке его ещё нет — сохраняем в поле phone.
+    if not client.phone:
+        phone = extract_phone(text)
+        if phone:
+            client.phone = phone
     db.commit()
 
     history_rows = (
