@@ -95,6 +95,16 @@ async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Dep
         return {"ok": True}
 
     name = message.get("from", {}).get("first_name")
+
+    # Кнопка Start: превращаем /start в служебную реплику, чтобы бот сам поздоровался
+    # первым сообщением сценария — на языке интерфейса клиента
+    if text.strip().lower() == "/start":
+        lang_code = message.get("from", {}).get("language_code") or "unknown"
+        text = (
+            f"[Клиент только что открыл чат и нажал Start. Код языка его Telegram: {lang_code}. "
+            "Поприветствуй его первым сообщением по сценарию на этом языке.]"
+        )
+
     client = find_or_create_client(db, tenant, "telegram", str(chat_id), name=name)
     dialog = get_active_dialog(db, client, "telegram")
     reply = handle_incoming_message(db, tenant, client, dialog, text)
