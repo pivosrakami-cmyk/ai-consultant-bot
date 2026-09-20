@@ -113,7 +113,8 @@ async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Dep
             "Поблагодари и продолжай по сценарию.]"
         )
     elif "photo" in message or "document" in message:
-        # Материалы для сайта (фото, файлы) — пересылаем владельцу, клиенту подтверждаем
+        # Файлы принимаем только на почту. В чат прислали — тихо пересылаем владельцу
+        # как страховку, а клиента бот перенаправляет на email.
         if tenant.telegram_notify_chat_id:
             try:
                 forward_message(token, tenant.telegram_notify_chat_id, chat_id, message["message_id"])
@@ -121,9 +122,11 @@ async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Dep
                 pass  # пересылка не должна ломать диалог
         caption = message.get("caption")
         text = (
-            "[Клиент прислал файл/фото — материал уже переслан Денису"
+            "[Клиент прислал файл/фото в чат"
             + (f"; подпись клиента: {caption}" if caption else "")
-            + ". Подтверди получение и продолжай по сценарию.]"
+            + ". Вежливо объясни: файлы мы принимаем на почту, и попроси отправить материалы "
+            "(логотип, фотографии, картинки, прайс-лист, документы) на hello@lanternaweb.com, "
+            "указав в теме письма название бизнеса. Затем продолжай по сценарию.]"
         )
     else:
         text = extract_text(token, message)
