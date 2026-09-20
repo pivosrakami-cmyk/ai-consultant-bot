@@ -8,15 +8,35 @@ def _api_url(token: str, method: str) -> str:
     return f"https://api.telegram.org/bot{token}/{method}"
 
 
-def send_message(token: str, chat_id: int | str, text: str) -> None:
+def send_message(token: str, chat_id: int | str, text: str, reply_markup: dict | None = None) -> None:
     # Проверяем ответ Telegram: без этого ошибка отправки (битый токен, пустой текст)
     # молча терялась бы, а вебхук всё равно возвращал бы 200.
+    payload: dict = {"chat_id": chat_id, "text": text}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
     response = httpx.post(
         _api_url(token, "sendMessage"),
-        json={"chat_id": chat_id, "text": text},
+        json=payload,
         timeout=10,
     )
     response.raise_for_status()
+
+
+# Кнопка «поделиться номером» — показываем, пока телефон клиента неизвестен
+SHARE_PHONE_KEYBOARD = {
+    "keyboard": [[{"text": "📱 Share number · Partilhar número", "request_contact": True}]],
+    "resize_keyboard": True,
+    "one_time_keyboard": True,
+}
+
+
+def forward_message(token: str, to_chat_id: int | str, from_chat_id: int | str, message_id: int) -> None:
+    """Пересылает сообщение клиента (фото, файл) владельцу бизнеса."""
+    httpx.post(
+        _api_url(token, "forwardMessage"),
+        json={"chat_id": to_chat_id, "from_chat_id": from_chat_id, "message_id": message_id},
+        timeout=10,
+    ).raise_for_status()
 
 
 def _download_file(token: str, file_id: str) -> bytes:

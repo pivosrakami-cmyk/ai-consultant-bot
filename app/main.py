@@ -22,7 +22,13 @@ from app.messenger_channel import iter_incoming_messages as iter_messenger_messa
 from app.messenger_channel import resolve_credentials as resolve_messenger_credentials
 from app.messenger_channel import send_message as send_messenger_message
 from app.messenger_channel import extract_text as extract_messenger_text
-from app.telegram_channel import extract_text, resolve_bot_token, send_message
+from app.telegram_channel import (
+    SHARE_PHONE_KEYBOARD,
+    extract_text,
+    forward_message,
+    resolve_bot_token,
+    send_message,
+)
 from app.viber_channel import extract_text as extract_viber_text
 from app.viber_channel import resolve_token as resolve_viber_token
 from app.viber_channel import send_message as send_viber_message
@@ -87,29 +93,53 @@ async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Dep
 
     token = resolve_bot_token(tenant.telegram_bot_token)
     chat_id = message["chat"]["id"]
-    text = extract_text(token, message)
-    if not text:
-        # Голосовое не распозналось (лимит Gemini и т.п.) — просим написать текстом
-        if "voice" in message or "audio" in message:
-            send_message(token, chat_id, "Не получилось распознать голосовое. Напишите, пожалуйста, текстом.")
-        return {"ok": True}
-
     name = message.get("from", {}).get("first_name")
-
-    # Кнопка Start: превращаем /start в служебную реплику, чтобы бот сам поздоровался
-    # первым сообщением сценария — на языке интерфейса клиента
-    if text.strip().lower() == "/start":
-        lang_code = message.get("from", {}).get("language_code") or "unknown"
-        text = (
-            f"[Клиент только что открыл чат и нажал Start. Код языка его Telegram: {lang_code}. "
-            "Поприветствуй его первым сообщением по сценарию на этом языке.]"
-        )
-
     client = find_or_create_client(db, tenant, "telegram", str(chat_id), name=name)
+
+    contact = message.get("contact")
+    if contact and contact.get("phone_number"):
+        # Клиент нажал кнопку «поделиться номером»
+        client.phone = contact["phone_number"]
+        db.commit()
+        text = (
+            f"[Клиент поделился номером телефона: {contact['phone_number']}. "
+            "Поблагодари и продолжай по сценарию.]"
+        )
+    elif "photo" in message or "document" in message:
+        # Материалы для сайта (фото, файлы) — пересылаем владельцу, клиенту подтверждаем
+        if tenant.telegram_notify_chat_id:
+            try:
+                forward_message(token, tenant.telegram_notify_chat_id, chat_id, message["message_id"])
+            except Exception:
+                pass  # пересылка не должна ломать диалог
+        caption = message.get("caption")
+        text = (
+            "[Клиент прислал файл/фото — материал уже переслан Денису"
+            + (f"; подпись клиента: {caption}" if caption else "")
+            + ". Подтверди получение и продолжай по сценарию.]"
+        )
+    else:
+        text = extract_text(token, message)
+        if not text:
+            # Голосовое не распозналось (лимит Gemini и т.п.) — просим написать текстом
+            if "voice" in message or "audio" in message:
+                send_message(token, chat_id, "Не получилось распознать голосовое. Напишите, пожалуйста, текстом.")
+            return {"ok": True}
+
+        # Кнопка Start: превращаем /start в служебную реплику, чтобы бот сам поздоровался
+        # первым сообщением сценария — на языке интерфейса клиента
+        if text.strip().lower() == "/start":
+            lang_code = message.get("from", {}).get("language_code") or "unknown"
+            text = (
+                f"[Клиент только что открыл чат и нажал Start. Код языка его Telegram: {lang_code}. "
+                "Поприветствуй его первым сообщением по сценарию на этом языке.]"
+            )
+
     dialog = get_active_dialog(db, client, "telegram")
     reply = handle_incoming_message(db, tenant, client, dialog, text)
 
-    send_message(token, chat_id, reply)
+    # Пока телефона нет — предлагаем кнопку «поделиться номером»
+    send_message(token, chat_id, reply, reply_markup=None if client.phone else SHARE_PHONE_KEYBOARD)
     return {"ok": True}
 
 
