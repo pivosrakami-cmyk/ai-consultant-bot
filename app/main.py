@@ -1,3 +1,5 @@
+import os
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_
@@ -37,6 +39,15 @@ app.mount("/crm", StaticFiles(directory=str(BASE_DIR / "app" / "static"), html=T
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    # Автосев тенанта Lanternaweb: правки базы знаний доезжают обычным деплоем,
+    # без ручного запуска скрипта в контейнере. Работает только если задан его токен.
+    if os.environ.get("LANTERNAWEB_TELEGRAM_TOKEN"):
+        from scripts.seed_lanternaweb import run as seed_lanternaweb
+
+        try:
+            seed_lanternaweb()
+        except Exception as exc:  # сид не должен ронять воркер
+            print(f"seed_lanternaweb failed: {exc}")
 
 
 def check_api_key(x_api_key: str = Header(default="")) -> None:
