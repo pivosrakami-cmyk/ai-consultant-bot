@@ -179,10 +179,13 @@ def run() -> None:
             tenant.telegram_bot_token = token
         if notify_chat:
             tenant.telegram_notify_chat_id = notify_chat
-        if wa_phone_id and wa_token and wa_verify:
-            tenant.whatsapp_phone_number_id = wa_phone_id
-            tenant.whatsapp_access_token = wa_token
+        # Verify-токен нужен раньше остальных: Meta проверяет вебхук до выдачи номера
+        if wa_verify:
             tenant.whatsapp_verify_token = wa_verify
+        if wa_phone_id:
+            tenant.whatsapp_phone_number_id = wa_phone_id
+        if wa_token:
+            tenant.whatsapp_access_token = wa_token
         db.commit()
         print(f"Обновлён тенант '{SLUG}', id={tenant.id}")
     else:
