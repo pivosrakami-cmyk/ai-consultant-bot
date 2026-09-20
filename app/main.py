@@ -91,6 +91,13 @@ async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Dep
     if not message:
         return {"ok": True}
 
+    # Группы/каналы — не клиенты: бот там молчит. Печатаем chat_id, чтобы взять его
+    # из логов при настройке группы под заявки.
+    chat = message.get("chat", {})
+    if chat.get("type") != "private":
+        print(f"group message ignored: chat_id={chat.get('id')} title={chat.get('title')!r}")
+        return {"ok": True}
+
     token = resolve_bot_token(tenant.telegram_bot_token)
     chat_id = message["chat"]["id"]
     name = message.get("from", {}).get("first_name")

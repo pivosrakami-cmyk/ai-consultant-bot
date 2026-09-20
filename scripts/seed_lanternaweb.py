@@ -147,6 +147,8 @@ def run() -> None:
     db = SessionLocal()
 
     token = os.environ.get("LANTERNAWEB_TELEGRAM_TOKEN", "").strip()
+    # Куда слать заявки: своя группа/чат Lanternaweb, иначе общий chat_id из настроек
+    notify_chat = os.environ.get("LANTERNAWEB_NOTIFY_CHAT_ID", "").strip() or settings.telegram_notify_chat_id
 
     tenant = db.query(Tenant).filter(Tenant.slug == SLUG).first()
     if tenant:
@@ -154,6 +156,8 @@ def run() -> None:
         tenant.system_prompt = SYSTEM_PROMPT
         if token:
             tenant.telegram_bot_token = token
+        if notify_chat:
+            tenant.telegram_notify_chat_id = notify_chat
         db.commit()
         print(f"Обновлён тенант '{SLUG}', id={tenant.id}")
     else:
@@ -162,8 +166,7 @@ def run() -> None:
             name="Lanternaweb",
             system_prompt=SYSTEM_PROMPT,
             telegram_bot_token=token or None,
-            # Заявки шлём Денису в тот же чат, что и у demo-тенанта (личный chat_id из env)
-            telegram_notify_chat_id=settings.telegram_notify_chat_id or None,
+            telegram_notify_chat_id=notify_chat or None,
         )
         db.add(tenant)
         db.commit()
