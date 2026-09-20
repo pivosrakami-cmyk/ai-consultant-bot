@@ -140,6 +140,7 @@ def handle_incoming_message(
         notify_owner(
             f"Новая заявка от {client.name or 'клиента'} ({dialog.channel}):\n{description}",
             chat_id=tenant.telegram_notify_chat_id,
+            token=tenant.telegram_bot_token,
         )
 
     return visible_reply
