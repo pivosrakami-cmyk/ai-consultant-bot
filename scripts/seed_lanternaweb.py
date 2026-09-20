@@ -162,6 +162,10 @@ def run() -> None:
     token = os.environ.get("LANTERNAWEB_TELEGRAM_TOKEN", "").strip()
     # Куда слать заявки: своя группа/чат Lanternaweb, иначе общий chat_id из настроек
     notify_chat = os.environ.get("LANTERNAWEB_NOTIFY_CHAT_ID", "").strip() or settings.telegram_notify_chat_id
+    # WhatsApp Cloud API — включается, когда заданы все три переменные
+    wa_phone_id = os.environ.get("LANTERNAWEB_WHATSAPP_PHONE_ID", "").strip()
+    wa_token = os.environ.get("LANTERNAWEB_WHATSAPP_TOKEN", "").strip()
+    wa_verify = os.environ.get("LANTERNAWEB_WHATSAPP_VERIFY", "").strip()
 
     tenant = db.query(Tenant).filter(Tenant.slug == SLUG).first()
     if tenant:
@@ -171,6 +175,10 @@ def run() -> None:
             tenant.telegram_bot_token = token
         if notify_chat:
             tenant.telegram_notify_chat_id = notify_chat
+        if wa_phone_id and wa_token and wa_verify:
+            tenant.whatsapp_phone_number_id = wa_phone_id
+            tenant.whatsapp_access_token = wa_token
+            tenant.whatsapp_verify_token = wa_verify
         db.commit()
         print(f"Обновлён тенант '{SLUG}', id={tenant.id}")
     else:
