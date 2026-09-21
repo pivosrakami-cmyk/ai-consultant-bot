@@ -28,6 +28,7 @@ from app.telegram_channel import (
     forward_message,
     resolve_bot_token,
     send_message,
+    send_typing,
 )
 from app.viber_channel import extract_text as extract_viber_text
 from app.viber_channel import resolve_token as resolve_viber_token
@@ -37,6 +38,7 @@ from app.whatsapp_channel import extract_text as extract_whatsapp_text
 from app.whatsapp_channel import iter_incoming_messages as iter_whatsapp_messages
 from app.whatsapp_channel import resolve_credentials as resolve_whatsapp_credentials
 from app.whatsapp_channel import send_message as send_whatsapp_message
+from app.whatsapp_channel import send_typing as send_whatsapp_typing
 
 app = FastAPI(title="AI-консультант — воркер")
 app.mount("/crm", StaticFiles(directory=str(BASE_DIR / "app" / "static"), html=True), name="crm")
@@ -145,6 +147,9 @@ async def telegram_webhook(tenant_slug: str, request: Request, db: Session = Dep
                 "Поприветствуй его первым сообщением по сценарию на этом языке.]"
             )
 
+    # «Печатает…», пока Claude готовит ответ
+    send_typing(token, chat_id)
+
     dialog = get_active_dialog(db, client, "telegram")
     reply = handle_incoming_message(db, tenant, client, dialog, text)
 
@@ -196,11 +201,21 @@ async def whatsapp_webhook(tenant_slug: str, request: Request, db: Session = Dep
 
     payload = await request.json()
     for message, sender_name in iter_whatsapp_messages(payload):
-        text = extract_whatsapp_text(access_token, message)
-        if not text:
-            continue
-
         external_id = message["from"]
+
+        if message.get("type") == "request_welcome":
+            # Клиент только что открыл чат (welcome-событие) — здороваемся первыми
+            text = (
+                "[Клиент только что открыл чат в WhatsApp и ещё ничего не написал. "
+                "Поприветствуй его первым сообщением по сценарию.]"
+            )
+        else:
+            # Показываем «печатает…» и синие галочки, пока Claude думает
+            send_whatsapp_typing(access_token, phone_number_id, message.get("id", ""))
+            text = extract_whatsapp_text(access_token, message)
+            if not text:
+                continue
+
         client = find_or_create_client(db, tenant, "whatsapp", external_id, name=sender_name, phone=external_id)
         dialog = get_active_dialog(db, client, "whatsapp")
         reply = handle_incoming_message(db, tenant, client, dialog, text)

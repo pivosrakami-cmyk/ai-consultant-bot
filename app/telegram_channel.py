@@ -30,6 +30,18 @@ SHARE_PHONE_KEYBOARD = {
 }
 
 
+def send_typing(token: str, chat_id: int | str) -> None:
+    """Показывает клиенту «печатает…», пока Claude готовит ответ."""
+    try:
+        httpx.post(
+            _api_url(token, "sendChatAction"),
+            json={"chat_id": chat_id, "action": "typing"},
+            timeout=5,
+        )
+    except Exception:
+        pass  # косметика, не должна ломать ответ
+
+
 def forward_message(token: str, to_chat_id: int | str, from_chat_id: int | str, message_id: int) -> None:
     """Пересылает сообщение клиента (фото, файл) владельцу бизнеса."""
     httpx.post(

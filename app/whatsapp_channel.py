@@ -23,6 +23,24 @@ def send_message(access_token: str, phone_number_id: str, to: str, text: str) ->
     )
 
 
+def send_typing(access_token: str, phone_number_id: str, message_id: str) -> None:
+    """Помечает входящее прочитанным и показывает клиенту «печатает…» (до 25 сек или до ответа)."""
+    try:
+        httpx.post(
+            f"{GRAPH_API}/{phone_number_id}/messages",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "messaging_product": "whatsapp",
+                "status": "read",
+                "message_id": message_id,
+                "typing_indicator": {"type": "text"},
+            },
+            timeout=10,
+        )
+    except Exception:
+        pass  # индикатор — косметика, не должен ломать ответ
+
+
 def _download_media(access_token: str, media_id: str) -> bytes:
     headers = {"Authorization": f"Bearer {access_token}"}
     meta = httpx.get(f"{GRAPH_API}/{media_id}", headers=headers, timeout=10).json()
