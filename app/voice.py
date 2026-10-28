@@ -4,10 +4,7 @@ import httpx
 
 from app.config import settings
 
-GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent"
-)
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
 def transcribe_voice(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str | None:
@@ -31,7 +28,7 @@ def transcribe_voice(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str | 
 
     try:
         response = httpx.post(
-            GEMINI_URL,
+            GEMINI_URL.format(model=settings.gemini_model),
             params={"key": settings.gemini_api_key},
             json=payload,
             timeout=30,

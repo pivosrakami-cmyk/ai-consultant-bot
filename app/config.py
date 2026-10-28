@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_notify_chat_id: str = ""
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-flash-latest"
     crm_api_key: str = "change-me"
     public_base_url: str = ""
 
