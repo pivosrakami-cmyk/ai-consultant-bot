@@ -63,6 +63,24 @@ def check_api_key(x_api_key: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="Неверный API-ключ")
 
 
+@app.get("/api/admin/export-db", dependencies=[Depends(check_api_key)])
+def export_db():
+    """Временно: снимок базы SQLite для переноса на другой сервер."""
+    import sqlite3
+    import tempfile
+
+    from fastapi.responses import FileResponse
+
+    src_path = settings.database_url.replace("sqlite:///", "")
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+    src, dst = sqlite3.connect(src_path), sqlite3.connect(tmp.name)
+    src.backup(dst)
+    src.close()
+    dst.close()
+    return FileResponse(tmp.name, filename="bot.db")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
